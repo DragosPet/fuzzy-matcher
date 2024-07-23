@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.12"
 pandas = "^2.2.2"
 rapidfuzz = "^3.9.4"
+scikit-learn = "^1.5.1"
+tfidf-matcher = "^0.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"
