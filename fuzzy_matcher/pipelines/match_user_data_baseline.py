@@ -43,25 +43,28 @@ if __name__ == "__main__":
     # matches_df = process_best_fuzzy_match_baseline(unmapped_df, candidates=candidate_matches)
     # print(matches_df)
 
-    count_l = []
-
 
     match_list = []
-    loop = asyncio.get_event_loop()
-    future = asyncio.ensure_future(
-        process_best_fuzzy_match_baseline_parallel(
-            queries=queries,
-            candidates=candidate_matches,
-            workers=8,
-            matches=match_list,
-            count_l=count_l
-        )
-    )
-    loop.run_until_complete(future)
+    process_best_fuzzy_match_baseline_parallel(queries=queries[:100],candidates=candidate_matches, workers=10, matches=match_list)
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+    
+    # future = asyncio.ensure_future(
+    #     process_best_fuzzy_match_baseline_parallel(
+    #         loop=loop,
+    #         queries=queries[:100],
+    #         candidates=candidate_matches,
+    #         workers=1,
+    #         matches=match_list
+    #     )
+    # )
+    # loop.run_until_complete(future)
 
     toc = time.perf_counter()
 
     elapsed = round(toc-tic,2)
+
+    print(pd.DataFrame(match_list))
 
     print(f"Elapsed mapping time: {elapsed}")
 

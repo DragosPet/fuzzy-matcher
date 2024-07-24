@@ -1,10 +1,19 @@
 import asyncio
 import numpy as np
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiprocessing.pool import ThreadPool
 from rapidfuzz.distance import Levenshtein
 from rapidfuzz.process import extractOne, cdist
 from rapidfuzz.fuzz import ratio
+
+# set logging basic config
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S",
+    level=logging.INFO,
+)
 
 def preprocess_dataframe(input_df: pd.DataFrame) -> pd.DataFrame:
     """Given names dataframe, apply preprocessing steps to assure basic matching."""
@@ -42,14 +51,14 @@ def get_best_fuzzy_match_process(input_string:str, candidate_strings:list['str']
         choices=candidate_strings,
         scorer=ratio
     )
-    print(best_candidate)
-    return best_candidate
+    original_val = input_string
+    return (original_val, best_candidate)
 
 def process_best_fuzzy_match_baseline(queries:list['str'], candidates:list["str"]) -> pd.DataFrame:
     count = 0
     matches = []
     for query in queries : 
-        match = get_best_fuzzy_match_process(query, candidates)
+        match = get_best_fuzzy_match_baseline(query, candidates)
         matches.append(match)
         count +=1
         print(count)
@@ -57,31 +66,50 @@ def process_best_fuzzy_match_baseline(queries:list['str'], candidates:list["str"
             print(f"processed {count} records !")
     return pd.DataFrame(matches)
 
-async def process_best_fuzzy_match_baseline_parallel(queries:list["str"], candidates:list['str'], workers:int=1, matches:list['dict']=[], count_l:list['int']=[]) -> pd.DataFrame:
-    print("inside call method")
+def process_best_fuzzy_match_baseline_parallel(queries:list["str"], candidates:list['str'], workers:int, matches:list['dict']) -> pd.DataFrame:
+    print(f"Running on {workers} threads !")
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        print("inside thread pool")
-        loop = asyncio.get_event_loop()
-        tasks = [
-            loop.run_in_executor(
-                executor,
-                get_best_fuzzy_match_process,
-                query, 
-                candidates
-            )
-            for query in queries
-        ]
-        for result in await asyncio.gather(*tasks):
-            print(result)
-            matches.append(result)
-            count_l.append(1)
-            if len(count_l) % 100 == 0 : 
-                print(f"Processed {len(count_l)} records !")
+        tasks = {
+            executor.submit(get_best_fuzzy_match_process, query, candidates) : query for query in queries
+        }
+        for task in as_completed(tasks):
+            result = tasks[task]
+            try:
+                matches.append(task.result()    )
+            except Exception as exc : 
+                print(f"Encountered exception : {exc} for {result}")
 
-def get_computed_distances(queries: list['str'], candidate_strings: list['str']):
-    dist_mat = cdist(queries, choices=candidate_strings, scorer=Levenshtein.normalized_similarity)
-    print(dist_mat.shape)
+
+        # tasks = [
+        #     loop.run_in_executor(
+        #         executor,
+        #         get_best_fuzzy_match_process,
+        #         query, 
+        #         candidates
+        #     )
+        #     for query in queries
+        # ]
+        # for result in await asyncio.gather(*tasks):
+        #     matches.append(result)
+
+def process_best_fuzzy_match_batch(queries: list['str'], candidate_strings: list['str']) -> list['dict']:
+    results = []
+    if len(queries) > 2500 : 
+        logging.error("Provided batch too large, skipping evaluation !")
+        return results
+    
+    dist_mat = cdist(queries, choices=candidate_strings, scorer=ratio, score_cutoff=70, workers=-1)
+    for i in range(len(queries)) :
+        bm_val = dist_mat[i].max()
+        bm_index = dist_mat[i].argmax()
+        bm = candidate_strings[bm_index]
+        results.append({
+            "string_to_match": queries[i],
+            "similarity_score": bm_val,
+            "matched_string":bm
+        })
+    return results
     
 
 
@@ -106,11 +134,11 @@ if __name__ == "__main__":
     # what remains unmapped, will go through fuzzy matching 
     unmapped_df = direct_mapping_df[direct_mapping_df["first_name_y"].isna()].reset_index()
     queries = list(unmapped_df["full_name_processed"].unique())
-    #get_computed_distances(queries[:1000], candidate_matches)
+    print(pd.DataFrame(get_computed_distances(queries[:2000], candidate_matches)))
     #print(queries)
     #print(type(queries))
 
-    matches = process_best_fuzzy_match_baseline(sorted(queries), sorted(candidate_matches))
+    #matches = process_best_fuzzy_match_baseline(sorted(queries), sorted(candidate_matches))
 
     # print("Started matching of fields: ")
     # matches = []
