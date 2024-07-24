@@ -1,40 +1,22 @@
-import time
+from time import perf_counter
 import pandas as pd
-import numpy as np
-from itertools import chain
-from fuzzy_matcher.matcher.match_datasets import (
-    preprocess_dataframe,
-    process_best_fuzzy_match_batch,
-)
+import tfidf_matcher as tm
+from fuzzy_matcher.matcher.match_datasets import preprocess_dataframe
 
 # pipeline config
-BATCH_SIZE = 1000
 SAMPLED_RUN = True
 SAMPLED_RUN_SIZE = 10000
-EXPORT_PATH = "output_data/name_matching_batch.csv"
+EXPORT_PATH = "output_data/name_matching_matrix.csv"
 
 if __name__ == "__main__":
-    # import generated test data
+    tic = perf_counter()
     primary_df = pd.read_csv("input_data/primary_names_dataset.csv")
     secondary_df = pd.read_csv("input_data/secondary_names_dataset.csv")
 
-    # timing the mapping process
-    tic = time.perf_counter()
-
-    # preprocess imported test data
     preprocessed_primary_df = preprocess_dataframe(primary_df)
     preprocessed_secondary_df = preprocess_dataframe(secondary_df)
 
-    preprocessed_secondary_df["full_name_processed"] = preprocessed_secondary_df[
-        "full_name_processed"
-    ]
-    preprocessed_primary_df["full_name_processed"] = preprocessed_primary_df[
-        "full_name_processed"
-    ]
-
-    candidate_matches = preprocessed_primary_df["full_name_processed"].unique()
-
-    # first, match elements based directly on join
+    # to reduce the mapping space, we will try a direct mapping first
     direct_mapping_df = pd.merge(
         preprocessed_secondary_df,
         preprocessed_primary_df,
@@ -43,8 +25,12 @@ if __name__ == "__main__":
     )
 
     # what remains unmapped, will go through fuzzy matching
-    unmapped_df = direct_mapping_df[direct_mapping_df["first_name_y"].isna()]
+    unmapped_df = direct_mapping_df[
+        direct_mapping_df["first_name_y"].isna()
+    ].reset_index()
     print(f"Records remaining to be mapped: {unmapped_df.shape[0]}")
+    queries = list(unmapped_df["full_name_processed"].unique())
+    candidates = preprocessed_primary_df["full_name_processed"].unique()
 
     if SAMPLED_RUN:
         print(f"Running matching only on a specific sample size : {SAMPLED_RUN_SIZE}")
@@ -52,27 +38,18 @@ if __name__ == "__main__":
     else:
         queries = unmapped_df["full_name_processed"].unique()
 
-    match_results = []
-    # run evaluation in batches, which should not be too high, to not encounter memory errors
-    for b_r in range(int(len(queries) / BATCH_SIZE) + (len(queries) % BATCH_SIZE > 0)):
-        batch_start = b_r * BATCH_SIZE
-        batch_end = (b_r + 1) * BATCH_SIZE
-        print(f"Evaluating range : {batch_start} - {batch_end}")
-        batch_res = process_best_fuzzy_match_batch(
-            queries=queries[batch_start:batch_end], candidate_strings=candidate_matches
-        )
-        match_results = list(chain(match_results, batch_res))
+    fuzzy_matched_df = tm.matcher(
+        original=queries,
+        lookup=candidates,
+        k_matches=1,  # for this experiment, we are interesting on getting the best match only
+        ngram_length=3,
+    )
 
-    toc = time.perf_counter()
-
+    toc = perf_counter()
     elapsed = round(toc - tic, 2)
-
     print(f"Elapsed matching time: {elapsed} s")
 
     print("Post-processing matching results !")
-
-    # post porcess data to create final df
-    fuzzy_matched_df = pd.DataFrame(match_results)
 
     dm_final = (
         direct_mapping_df[direct_mapping_df["first_name_y"].isna() == False][
@@ -92,11 +69,11 @@ if __name__ == "__main__":
     ]
 
     fm_final = (
-        fuzzy_matched_df[["string_to_match", "matched_string", "similarity_score"]]
+        fuzzy_matched_df[["Original Name", "Lookup 1", "Lookup 1 Confidence"]]
         .copy()
         .reset_index(drop=True)
     )
-    fm_final["mapping_source"] = "fuzzy_matching_batch"
+    fm_final["mapping_source"] = "fuzzy_matching_matrix"
     fm_final.columns = [
         "search_name_normalized",
         "match_name_normalized",

@@ -132,3 +132,5 @@ dmypy.json
 # specific configs
 /input_data/primary_names_dataset.csv
 /input_data/secondary_names_dataset.csv
+
+/output_data/name_match*
