@@ -9,7 +9,7 @@ import time
 # Pipe Config
 BASE_INPUT_FILE_PATH = "input_data/Customer_Names.csv"
 CROSSING_LIMIT = 500  # this will generate 1.000.000 records in the names Dataframe
-NOISIFICATION_SAMPLE = 0.35  # this will dictate the percentage of the primary DataFrame that will contain noise
+NOISIFICATION_SAMPLE = 0.4  # this will dictate the percentage of the primary DataFrame that will contain noise
 GENERATION_TARGET_PATH = "input_data/"
 
 if __name__ == "__main__":

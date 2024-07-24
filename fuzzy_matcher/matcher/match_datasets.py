@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import logging
 from rapidfuzz.process import extractOne, cdist
-from rapidfuzz.fuzz import ratio
+from rapidfuzz.fuzz import token_sort_ratio
 
 # set logging basic config
 logging.basicConfig(
@@ -31,7 +31,7 @@ def get_best_fuzzy_match_process(
     """Given an input string and a list of candidates, run distance/similarity comparison and get best match."""
     # use the built-in extraction method
     best_candidate = extractOne(
-        query=input_string, choices=candidate_strings, scorer=ratio
+        query=input_string, choices=candidate_strings, scorer=token_sort_ratio
     )
     original_val = input_string
     return (original_val, *best_candidate)
@@ -62,7 +62,7 @@ def process_best_fuzzy_match_batch(
         return results
 
     dist_mat = cdist(
-        queries, choices=candidate_strings, scorer=ratio, score_cutoff=70, workers=-1
+        queries, choices=candidate_strings, scorer=token_sort_ratio, score_cutoff=70, workers=-1
     )
     for i in range(len(queries)):
         bm_val = dist_mat[i].max()

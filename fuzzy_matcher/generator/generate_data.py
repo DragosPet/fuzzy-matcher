@@ -2,6 +2,7 @@ import os
 import logging
 import pandas as pd
 import random
+import string
 
 # set logging basic config
 logging.basicConfig(
@@ -50,6 +51,18 @@ def multiply_suffixes(input_string: str) -> str:
     processed_string = str(input_string) + suffix
     return processed_string
 
+def add_random_character(input_string:str, insertion_pos:int=None) -> str:
+    """Given input string and optional insertion position, add random character to string."""
+    if insertion_pos:
+        if insertion_pos > len(input_string):
+            logging.error("Provided insertion position is outside of input string boundaries !")
+            return input_string
+        random_char = random.choice(string.ascii_letters)
+        return input_string[:insertion_pos] + random_char + input_string[insertion_pos:]
+    else:
+        random_pos = random.randint(0,len(input_string))
+        random_char = random.choice(string.ascii_letters)
+        return input_string[:random_pos] + random_char + input_string[random_pos:]        
 
 def multiply_random_letters(input_string: str) -> str:
     """Given input string, multiply letters which are candidate for username usage, in a random manner."""
@@ -97,6 +110,7 @@ def noisify_dataframe(input_df: pd.DataFrame, noise_sample_size: float) -> pd.Da
         1: multiply_suffixes,
         2: multiply_random_letters,
         3: str.lower,
+        4: add_random_character
     }
     noisified_data = []
     for index, row in noisification_candidates_df.iterrows():
@@ -114,12 +128,18 @@ def noisify_dataframe(input_df: pd.DataFrame, noise_sample_size: float) -> pd.Da
             candidate_col = "last_name"
 
         # apply one of the noisification function randomly
-        candidate_func_number = random.randint(0, 3)
+        candidate_func_number = random.randint(0, 4)
         candidate_func = nosification_candidate_functions[candidate_func_number]
 
         # update data based on the random vals
 
         d[candidate_col] = candidate_func(d[candidate_col])
+
+        # randomly swap first name with last_name
+        if random.randint(0,5) >= 4:
+            fn = d["first_name"]
+            d["first_name"] = d["last_name"]
+            d["last_name"] = fn
 
         noisified_data.append(d)
 
